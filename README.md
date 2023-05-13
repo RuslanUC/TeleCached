@@ -93,3 +93,4 @@ $ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMes
   - [ ] add setWebhook, deleteWebhook, getWebhookInfo views
   - [ ] add getUser view
   - [ ] add getChatMembers view
+  - [ ] use pyrogram/telethon to upload big files
