@@ -1,7 +1,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2021-present RuslanUC
+Copyright (c) 2023-present RuslanUC
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -33,18 +33,25 @@ class BaseModel(models.Model):
 
     @classmethod
     def update_or_create_objects(cls, id_field_name: str, objects: list[dict], defaults_func) -> None:
-        pk_name = cls._meta.pk.name
         for obj in objects:
-            cls.objects.update_or_create(**{pk_name: obj[id_field_name]}, defaults=defaults_func(obj))
+            cls.objects.update_or_create(**{id_field_name: obj[id_field_name]}, defaults=defaults_func(obj))
 
 class Message(BaseModel):
-    message_id: int = models.BigIntegerField(primary_key=True)
+    id: int = models.BigAutoField(primary_key=True)
+    message_id: int = models.BigIntegerField()
     chat_id: int = models.BigIntegerField()
     bot_id: int = models.BigIntegerField()
     message_thread_id: int = models.BigIntegerField(default=None, null=True)
     reply_to_message_id: int = models.BigIntegerField(default=None, null=True)
     from_peer: int = models.BigIntegerField(default=None, null=True)
     serialized_message: str = models.TextField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message_id", "bot_id"], name="unique_message_bot"
+            )
+        ]
 
     def __repr__(self) -> str:
         return f"Message(message_id={self.message_id!r}, bot_id={self.bot_id!r}, chat_id={self.chat_id!r}, " \

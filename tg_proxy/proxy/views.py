@@ -1,7 +1,7 @@
 """
 The MIT License (MIT)
 
-Copyright (c) 2021-present RuslanUC
+Copyright (c) 2023-present RuslanUC
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from json import JSONDecodeError, dumps, loads
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from django.http import HttpResponse, HttpRequest, JsonResponse
@@ -32,18 +32,7 @@ from pydantic import ValidationError
 from . import pydantic_models
 from .models import Message, Chat, User
 from .pydantic_models import GetMessageParams, GetMessagesParams
-
-
-def check_token(token: str) -> Optional[HttpResponse]:
-    resp = httpx.get(f"https://api.telegram.org/bot{token}/getMe")
-    if resp.status_code != 200:
-        try:
-            j = resp.json()
-        except JSONDecodeError:
-            j = {"description": "Unknown error."}
-        return JsonResponse({"ok": False, "error_code": resp.status_code,
-                             "description": f"Telegram Bot Api server returned an error: {j['description']}"},
-                            status=resp.status_code)
+from .utils import check_token, find_dict
 
 
 def get_message_view(request: HttpRequest, bot_token: str) -> HttpResponse:
@@ -86,50 +75,48 @@ def del_webhook_view(request: HttpRequest) -> HttpResponse:
     return JsonResponse({"ok": False, "error_code": 501, "description": "This method is not implemented yet."}, status=501)
 
 
-def find_dict(d: Any, found: dict, *models: type) -> None:
-    if isinstance(d, dict):
-        for model in models:
-            if model not in found: found[model] = []
-            try:
-                _ = model(**d)
-                found[model].append(d)
-            except ValidationError:
-                pass
-        return find_dict(list(d.values()), found, *models)
-    elif isinstance(d, list):
-        for item in d:
-            find_dict(item, found, *models)
-
-
 def proxy_view(request: HttpRequest, bot_token: str, method: str) -> HttpResponse:
-    if request.method == "GET":
-        resp = httpx.get(f"https://api.telegram.org/bot{bot_token}/{method}", params=request.GET)
-        headers = dict(resp.headers)
-        found = {}
-        try:
-            find_dict(resp.json(), found, pydantic_models.Message, pydantic_models.Chat, pydantic_models.User)
-        except JSONDecodeError:
-            pass
-        for model, dicts in found.items():
-            if model is pydantic_models.Message:
-                Message.update_or_create_objects("message_id", dicts, lambda d: {
-                    "chat_id": d["chat"]["id"], "bot_id": bot_token.split(":")[0],
-                    "message_thread_id": d.get("message_thread_id", None),
-                    "reply_to_message_id": d.get("reply_to_message", {}).get("message_id"),
-                    "from_peer": d.get("from", {}).get("id"), "serialized_message": dumps(d),
-                })
-            elif model is pydantic_models.Chat:
-                Chat.update_or_create_objects("id", dicts, lambda d: {
-                    "bot_id": bot_token.split(":")[0], "type": d["type"], "serialized_chat": dumps(d),
-                })
-            elif model is pydantic_models.User:
-                User.update_or_create_objects("id", dicts, lambda d: {
-                    "username": d.get("username", None), "first_name": d["first_name"],
-                    "last_name": d.get("last_name", None), "serialized_user": dumps(d),
-                })
+    headers = {}
+    for header in ("User-Agent", "Content-Type", "Accept"):
+        if header in request.headers:
+            headers[header] = request.headers[header]
+    try:
+        if request.method == "GET":
+            resp = httpx.get(f"https://api.telegram.org/bot{bot_token}/{method}", params=request.GET,
+                             headers=headers)
+        elif request.method == "POST":
+            resp = httpx.post(f"https://api.telegram.org/bot{bot_token}/{method}", params=request.GET, data=request.body,
+                              headers=headers)
+        else:
+            return JsonResponse({"ok": False, "error_code": 405, "description": f"Method {request.method} is not allowed."}, status=405)
+    except:
+        return JsonResponse({"ok": False, "error_code": 500, "description": "Failed to make request to origin server."}, status=500)
 
-        for hbh_header in ("connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
-                           "transfer-encoding", "upgrade"): # Remove hop-by-hop headers
-            if hbh_header in headers: del headers[hbh_header]
-        return HttpResponse(resp.content, status=resp.status_code, headers=headers)
-    return HttpResponse()
+    headers = dict(resp.headers)
+    found = {}
+    try:
+        find_dict(resp.json(), found, pydantic_models.Message, pydantic_models.Chat, pydantic_models.User)
+    except JSONDecodeError:
+        pass
+    for model, dicts in found.items():
+        if model is pydantic_models.Message:
+            Message.update_or_create_objects("message_id", dicts, lambda d: {
+                "chat_id": d["chat"]["id"], "bot_id": bot_token.split(":")[0],
+                "message_thread_id": d.get("message_thread_id", None),
+                "reply_to_message_id": d.get("reply_to_message", {}).get("message_id"),
+                "from_peer": d.get("from", {}).get("id"), "serialized_message": dumps(d),
+            })
+        elif model is pydantic_models.Chat:
+            Chat.update_or_create_objects("id", dicts, lambda d: {
+                "bot_id": bot_token.split(":")[0], "type": d["type"], "serialized_chat": dumps(d),
+            })
+        elif model is pydantic_models.User:
+            User.update_or_create_objects("id", dicts, lambda d: {
+                "username": d.get("username", None), "first_name": d["first_name"],
+                "last_name": d.get("last_name", None), "serialized_user": dumps(d),
+            })
+
+    for hbh_header in ("connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
+                       "transfer-encoding", "upgrade"):  # Remove hop-by-hop headers
+        if hbh_header in headers: del headers[hbh_header]
+    return HttpResponse(resp.content, status=resp.status_code, headers=headers)

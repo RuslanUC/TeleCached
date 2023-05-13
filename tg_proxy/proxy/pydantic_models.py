@@ -158,7 +158,7 @@ class GetMessageParams(BaseModel):
 class GetMessagesParams(BaseModel):
     chat_id: int
     limit: int = 100
-    before: int = 2 ** 64
+    before: int = 2**63 - 1
     after: int = 0
 
     @validator("limit")
