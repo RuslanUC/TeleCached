@@ -87,3 +87,9 @@ $ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMes
   - limit - integer, messages limit, minimum is 1, maximum is 100, default is 100
   - before - integer, id to which you want to get messages
   - after - integer, id from which you want to get messages
+
+
+### TODO
+  - [ ] add setWebhook, deleteWebhook, getWebhookInfo views
+  - [ ] add getUser view
+  - [ ] add getChatMembers view
