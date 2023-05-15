@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from . import pydantic_models
 from .models import Message, Chat, User
-from .pydantic_models import GetMessageParams, GetMessagesParams
+from .pydantic_models import GetMessageParams, GetMessagesParams, GetChatsParams, GetUserParams
 from .utils import check_token, find_dict, PyrogramBot
 
 
@@ -46,13 +46,13 @@ def get_message_view(request: HttpRequest, bot_token: str) -> HttpResponse:
     if message is None:
         return JsonResponse({"ok": False, "error_code": 400, "description": "Bad Request: message not found"},
                             status=404)
-    return JsonResponse(loads(message.serialized_message))
+    return JsonResponse({"ok": True, "result": loads(message.serialized_message)})
 
 
 def get_messages_view(request: HttpRequest, bot_token: str) -> HttpResponse:
     try:
         args = GetMessagesParams(**request.GET.dict())
-    except ValidationError as e:
+    except ValidationError:
         return JsonResponse({"ok": False, "error_code": 400, "description": f"Bad Request: invalid parameters"}, status=400)
     if (resp := check_token(bot_token)) is not None:
         return resp
@@ -60,7 +60,32 @@ def get_messages_view(request: HttpRequest, bot_token: str) -> HttpResponse:
         chat_id=args.chat_id, bot_id=bot_token.split(":")[0], message_id__gt=args.after, message_id__lt=args.before
     ).order_by("-message_id")[:args.limit]
     messages_json = [loads(message.serialized_message) for message in messages]
-    return JsonResponse(messages_json, safe=False)
+    return JsonResponse({"ok": True, "result": messages_json}, safe=False)
+
+
+def get_chats_view(request: HttpRequest, bot_token: str) -> HttpResponse:
+    try:
+        args = GetChatsParams(**request.GET.dict())
+    except ValidationError:
+        return JsonResponse({"ok": False, "error_code": 400, "description": f"Bad Request: invalid parameters"}, status=400)
+    if (resp := check_token(bot_token)) is not None:
+        return resp
+    chats = Chat.objects.filter(
+        bot_id=bot_token.split(":")[0], id__gt=args.after, id__lt=args.before, **{"type": args.type} if args.type else {}
+    ).order_by("-id")[:args.limit]
+    chats_json = [loads(chat.serialized_chat) for chat in chats]
+    return JsonResponse({"ok": True, "result": chats_json}, safe=False)
+
+
+def get_user_view(request: HttpRequest, bot_token: str) -> HttpResponse:
+    try:
+        args = GetUserParams(**request.GET.dict())
+    except ValidationError:
+        return JsonResponse({"ok": False, "error_code": 400, "description": f"Bad Request: invalid parameters"}, status=400)
+    if (resp := check_token(bot_token)) is not None:
+        return resp
+    user = User.objects.filter(id=args.user_id).first()
+    return JsonResponse({"ok": True, "result": loads(user.serialized_user) if user is not None else None}, safe=False)
 
 
 def set_webhook_view(request: HttpRequest, bot_token: str) -> HttpResponse:
@@ -76,6 +101,7 @@ def del_webhook_view(request: HttpRequest) -> HttpResponse:
 
 
 def proxy_view(request: HttpRequest, bot_token: str, method: str) -> HttpResponse:
+    bot_id = int(bot_token.split(":")[0])
     if method.startswith("send") and hasattr(PyrogramBot, method) and (api_id := getattr(settings, "TG_API_ID", None)) \
             and (api_hash := getattr(settings, "TG_API_HASH", None)) and request.GET.get("is_big", "false") == "true":
         bot = PyrogramBot(bot_token, api_id, api_hash)
@@ -83,7 +109,7 @@ def proxy_view(request: HttpRequest, bot_token: str, method: str) -> HttpRespons
         if message := func(request):
             raw_message = message["raw_message"]
             del message["raw_message"]
-            Message.update_or_create_objects("message_id", [message], lambda d: {
+            Message.update_or_create_objects("message_id", bot_id, [message], lambda d: {
                 "chat_id": d["chat"]["id"], "bot_id": bot_token.split(":")[0],
                 "message_thread_id": d.get("message_thread_id", None),
                 "reply_to_message_id": d.get("reply_to_message", {}).get("message_id"),
@@ -118,18 +144,18 @@ def proxy_view(request: HttpRequest, bot_token: str, method: str) -> HttpRespons
         pass
     for model, dicts in found.items():
         if model is pydantic_models.Message:
-            Message.update_or_create_objects("message_id", dicts, lambda d: {
-                "chat_id": d["chat"]["id"], "bot_id": bot_token.split(":")[0],
+            Message.update_or_create_objects("message_id", bot_id, dicts, lambda d: {
+                "chat_id": d["chat"]["id"], "bot_id": bot_id,
                 "message_thread_id": d.get("message_thread_id", None),
                 "reply_to_message_id": d.get("reply_to_message", {}).get("message_id"),
                 "from_peer": d.get("from", {}).get("id"), "serialized_message": dumps(d),
             })
         elif model is pydantic_models.Chat:
-            Chat.update_or_create_objects("id", dicts, lambda d: {
-                "bot_id": bot_token.split(":")[0], "type": d["type"], "serialized_chat": dumps(d),
+            Chat.update_or_create_objects("id", bot_id, dicts, lambda d: {
+                "bot_id": bot_id, "type": d["type"], "serialized_chat": dumps(d),
             })
         elif model is pydantic_models.User:
-            User.update_or_create_objects("id", dicts, lambda d: {
+            User.update_or_create_objects("id", bot_id, dicts, lambda d: {
                 "username": d.get("username", None), "first_name": d["first_name"],
                 "last_name": d.get("last_name", None), "serialized_user": dumps(d),
             })

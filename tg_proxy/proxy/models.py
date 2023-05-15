@@ -34,9 +34,12 @@ class BaseModel(models.Model):
         return repr(self)
 
     @classmethod
-    def update_or_create_objects(cls, id_field_name: str, objects: list[dict], defaults_func) -> None:
+    def update_or_create_objects(cls, id_field_name: str, bot_id: int, objects: list[dict], defaults_func) -> None:
+        search_q = {"bot_id": bot_id} \
+            if "bot_id" in [f.name for f in cls._meta.get_fields()] and id_field_name != "bot_id" \
+            else {}
         for obj in objects:
-            cls.objects.update_or_create(**{id_field_name: obj[id_field_name]}, defaults=defaults_func(obj))
+            cls.objects.update_or_create(**{id_field_name: obj[id_field_name]}, **search_q, defaults=defaults_func(obj))
 
 class Message(BaseModel):
     id: int = models.BigAutoField(primary_key=True)
@@ -73,10 +76,17 @@ class User(BaseModel):
 
 
 class Chat(BaseModel):
-    id: int = models.BigIntegerField(primary_key=True)
+    _id: int = models.BigAutoField(primary_key=True)
+    id: int = models.BigIntegerField()
     bot_id: int = models.BigIntegerField()
     type: str = models.CharField(max_length=16)
     serialized_chat: str = models.TextField()
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id", "bot_id"], name="unique_chat_bot"
+            )
+        ]
 
     def __repr__(self) -> str:
         return f"Chat(id={self.id!r}, bot_id={self.bot_id!r}, type={self.type!r})"

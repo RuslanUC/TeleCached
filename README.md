@@ -40,27 +40,8 @@ Now you can get this message via getMessage api method:
 ```shell
 $ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMessage?message_id=42
 {
-  "message_id": 42,
-  "from": {
-    "id": 123456,
-    "is_bot": true,
-    "first_name": "Bot",
-    "username": "bot"
-  },
-  "chat": {
-    "id": 777000,
-    "first_name": "Telegram",
-    "type": "private"
-  },
-  "date": 2147483647,
-  "text": "test"
-}
-```
-Or get all messages (received or sent after you started using TeleCached server) from the chat:
-```shell
-$ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMessages?chat_id=777000
-[
-  {
+  "ok": true,
+  "result": {
     "message_id": 42,
     "from": {
       "id": 123456,
@@ -76,7 +57,62 @@ $ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMes
     "date": 2147483647,
     "text": "test"
   }
-]
+}
+```
+
+Or get all messages (received or sent after you started using TeleCached server) from the chat:
+```shell
+$ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMessages?chat_id=777000
+{
+  "ok": true,
+  "result": [
+    {
+      "message_id": 42,
+      "from":
+      } {
+        "id": 123456,
+        "is_bot": true,
+        "first_name": "Bot",
+        "username": "bot"
+      },
+      "chat": {
+        "id": 777000,
+        "first_name": "Telegram",
+        "type": "private"
+      },
+      "date": 2147483647,
+      "text": "test"
+    }
+  ]
+}
+```
+
+Or get all chats:
+```shell
+$ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getChats
+{
+  "ok": true,
+  "result": [
+    {
+      "id": 777000,
+      "first_name": "Telegram",
+      "type": "private"
+    }
+  ]
+}
+```
+
+Or get user:
+```shell
+$ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getUser?user_id=777000
+{
+  "ok": true,
+  "result": {
+    "id": 777000,
+    "is_bot": false,
+    "first_name": "Telegram",
+  }
+}
 ```
 
 #### getMessage parameters:
@@ -88,10 +124,19 @@ $ curl http://127.0.0.1:8000/bot123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11/getMes
   - before - integer, id to which you want to get messages
   - after - integer, id from which you want to get messages
 
+#### getChats parameters:
+  - limit - integer, chats limit, minimum is 1, maximum is 100, default is 100
+  - before - integer, id to which you want to get chats
+  - after - integer, id from which you want to get chats
+  - type - string, chat type (private, group, supergroup, channel), empty is all (default)
+
+#### getUser parameters:
+  - user_id - integer, id of user you need to get
+
 
 ### TODO
   - [ ] add setWebhook, deleteWebhook, getWebhookInfo views
-  - [ ] add getUser view
-  - [ ] add getChats view
+  - [x] add getUser view
+  - [x] add getChats view
   - [ ] add getChatMembers view
   - [x] use pyrogram/telethon to upload big files

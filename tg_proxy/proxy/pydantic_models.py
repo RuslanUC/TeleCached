@@ -166,3 +166,26 @@ class GetMessagesParams(BaseModel):
         if value > 100: value = 100
         if value < 1: value = 1
         return value
+
+
+class GetChatsParams(BaseModel):
+    limit: int = 100
+    before: int = 2 ** 63 - 1
+    after: int = -(2 ** 63)
+    type: str = ""
+
+    @validator("limit")
+    def validate_limit(cls: GetChatsParams, value: int) -> int:
+        if value > 100: value = 100
+        if value < 1: value = 1
+        return value
+
+    @validator("type")
+    def validate_type(cls: GetChatsParams, value: str) -> str:
+        if value not in ("", "private", "group", "supergroup", "channel"):
+            value = ""
+        return value
+
+
+class GetUserParams(BaseModel):
+    user_id: int

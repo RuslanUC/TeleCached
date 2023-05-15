@@ -207,7 +207,7 @@ class PyrogramBot:
 
     def _upload(self, media: str, args: dict) -> Optional[dict]:
         asyncio.set_event_loop(asyncio.new_event_loop())
-        bot_id = self._token.split(":")[0]
+        bot_id = int(self._token.split(":")[0])
         client_args = {
             "bot_token": self._token,
             "api_id": self._api_id,
@@ -223,9 +223,8 @@ class PyrogramBot:
             client_args["session_string"] = bot_session.session_string
         with Client(**client_args) as bot:
             if create_session:
-                BotSession.update_or_create_objects(
-                    "bot_id",
-                    [{"bot_id": self._token.split(":")[0], "session_string": bot.export_session_string()}],
+                BotSession.update_or_create_objects("bot_id", bot_id,
+                    [{"bot_id": bot_id, "session_string": bot.export_session_string()}],
                     lambda d: d
                 )
             func = getattr(bot, f"send_{media}")
