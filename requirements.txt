@@ -3,3 +3,5 @@ httpx~=0.24.0
 pydantic~=1.10.7
 httpx[http2]
 httpx[brotli]
+Pyrogram~=2.0.106
+tgcrypto~=1.2.5

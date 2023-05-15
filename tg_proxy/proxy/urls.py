@@ -21,11 +21,25 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
+from functools import wraps
 
+from django.http import JsonResponse, HttpResponse
 from django.urls import path
 
+from proxy.exceptions import BaseProxyException
 from proxy.views import set_webhook_view, del_webhook_view, get_webhook_view, proxy_view, get_message_view, \
     get_messages_view
+
+
+def handle_proxy_exception(view):
+    @wraps(view)
+    def exc_handler(*args, **kwargs) -> HttpResponse:
+        try:
+            return view(*args, **kwargs)
+        except BaseProxyException as e:
+            return JsonResponse({"ok": False, "message": e.message}, status=e.code)
+    return exc_handler
+
 
 urlpatterns = [
     path("bot<str:bot_token>/getMessage", get_message_view),
@@ -33,5 +47,5 @@ urlpatterns = [
     path("bot<str:bot_token>/setWebhook", set_webhook_view),
     path("bot<str:bot_token>/deleteWebhook", del_webhook_view),
     path("bot<str:bot_token>/getWebhookInfo", get_webhook_view),
-    path("bot<str:bot_token>/<str:method>", proxy_view),
+    path("bot<str:bot_token>/<str:method>", handle_proxy_exception(proxy_view)),
 ]

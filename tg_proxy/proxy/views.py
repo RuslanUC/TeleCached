@@ -23,16 +23,16 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from json import JSONDecodeError, dumps, loads
-from typing import Any
 
 import httpx
+from django.conf import settings
 from django.http import HttpResponse, HttpRequest, JsonResponse
 from pydantic import ValidationError
 
 from . import pydantic_models
 from .models import Message, Chat, User
 from .pydantic_models import GetMessageParams, GetMessagesParams
-from .utils import check_token, find_dict
+from .utils import check_token, find_dict, PyrogramBot
 
 
 def get_message_view(request: HttpRequest, bot_token: str) -> HttpResponse:
@@ -76,6 +76,24 @@ def del_webhook_view(request: HttpRequest) -> HttpResponse:
 
 
 def proxy_view(request: HttpRequest, bot_token: str, method: str) -> HttpResponse:
+    if method.startswith("send") and hasattr(PyrogramBot, method) and (api_id := getattr(settings, "TG_API_ID", None)) \
+            and (api_hash := getattr(settings, "TG_API_HASH", None)) and request.GET.get("is_big", "false") == "true":
+        bot = PyrogramBot(bot_token, api_id, api_hash)
+        func = getattr(bot, method)
+        if message := func(request):
+            raw_message = message["raw_message"]
+            del message["raw_message"]
+            Message.update_or_create_objects("message_id", [message], lambda d: {
+                "chat_id": d["chat"]["id"], "bot_id": bot_token.split(":")[0],
+                "message_thread_id": d.get("message_thread_id", None),
+                "reply_to_message_id": d.get("reply_to_message", {}).get("message_id"),
+                "from_peer": d.get("from", {}).get("id"), "serialized_message": dumps(d),
+            })
+            response = {"ok": True, "result": message}
+            if request.GET.get("with_raw", "false") == "true":
+                response["raw"] = raw_message
+            return JsonResponse(response)
+
     headers = {}
     for header in ("User-Agent", "Content-Type", "Accept"):
         if header in request.headers:
@@ -89,8 +107,8 @@ def proxy_view(request: HttpRequest, bot_token: str, method: str) -> HttpRespons
                               headers=headers)
         else:
             return JsonResponse({"ok": False, "error_code": 405, "description": f"Method {request.method} is not allowed."}, status=405)
-    except:
-        return JsonResponse({"ok": False, "error_code": 500, "description": "Failed to make request to origin server."}, status=500)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error_code": 500, "description": f"Failed to make request to origin server: {e}"}, status=500)
 
     headers = dict(resp.headers)
     found = {}

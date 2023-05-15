@@ -25,6 +25,8 @@ DEALINGS IN THE SOFTWARE.
 from django.db import models
 
 class BaseModel(models.Model):
+    objects = models.Manager()
+
     class Meta:
         abstract = True
 
@@ -98,3 +100,9 @@ class Webhook(BaseModel):
     def __repr__(self) -> str:
         return f"Webhook(bot_id={self.bot_id!r}"
 
+class BotSession(BaseModel):
+    bot_id: int = models.BigIntegerField(primary_key=True)
+    session_string: str = models.TextField()
+
+    def __repr__(self) -> str:
+        return f"BotSession(bot_id={self.bot_id!r}"
